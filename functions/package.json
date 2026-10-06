@@ -1,0 +1,24 @@
+{
+  "name": "gamer-art-factory-functions",
+  "private": true,
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@fal-ai/client": "^1.0.0",
+    "@google/genai": "^1.0.0",
+    "@google/generative-ai": "^0.24.1",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.2.3",
+    "form-data": "^4.0.5",
+    "jszip": "^3.10.1",
+    "node-fetch": "^3.3.0",
+    "sharp": "^0.34.5"
+  }
+}

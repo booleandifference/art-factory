@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+functions/node_modules/
+
+# Build output
+dist/
+
+# Environment files — NEVER commit real secrets
+.env
+.env.local
+.env.*.local
+functions/.env
+functions/.env.local
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+# .firebaserc is tracked — it holds the hosting target map firebase.json needs
+
+# Credentials & service accounts — NEVER commit these
+firebase-adc.json
+service-account*.json
+*-firebase-adminsdk*.json
+
+# Generated output
+product-book/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code session data
+.claude/
+
+# Private shop playbooks — kept out of the public repo
+# (functions/prompts/ is still uploaded by `firebase deploy`)
+private/
+functions/prompts/

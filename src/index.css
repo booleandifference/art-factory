@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+/* Custom theme for Gamer Art Factory */
+:root {
+  --color-primary: #8b5cf6;
+  --color-primary-hover: #7c3aed;
+  --color-surface: #1e1e2e;
+  --color-surface-hover: #2a2a3e;
+  --color-bg: #11111b;
+  --color-text: #cdd6f4;
+  --color-text-muted: #6c7086;
+  --color-border: #313244;
+  --color-keep: #a6e3a1;
+  --color-maybe: #f9e2af;
+  --color-reject: #f38ba8;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}

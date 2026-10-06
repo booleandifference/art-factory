@@ -1,0 +1,18 @@
+{
+  "projects": {
+    "default": "gamer-art-factory"
+  },
+  "targets": {
+    "gamer-art-factory": {
+      "hosting": {
+        "site": [
+          "gamer-art-factory"
+        ],
+        "app": [
+          "gamer-art-factory-app"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

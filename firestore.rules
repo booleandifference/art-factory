@@ -1,0 +1,125 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Only authenticated users can read/write anything
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    match /concepts/{conceptId} {
+      allow read, write: if isAuth();
+    }
+
+    match /prompts/{promptId} {
+      allow read, write: if isAuth();
+    }
+
+    match /jobs/{jobId} {
+      allow read, write: if isAuth();
+    }
+
+    // Public reads below serve the public site (thehoodiegamer.com)
+    match /images/{imageId} {
+      allow read: if resource.data.rating == "keep"
+                  && resource.data.listing.status == "published";
+      allow read, write: if isAuth();
+    }
+
+    match /upscaleJobs/{jobId} {
+      allow read, write: if isAuth();
+    }
+
+    match /videoJobs/{jobId} {
+      allow read, write: if isAuth();
+    }
+
+    match /videoGenerate/{triggerId} {
+      allow read, write: if isAuth();
+    }
+
+    match /videoCustomPrompt/{triggerId} {
+      allow read, write: if isAuth();
+    }
+
+    match /listingJobs/{jobId} {
+      allow read, write: if isAuth();
+    }
+
+    match /publishJobs/{jobId} {
+      allow read, write: if isAuth();
+    }
+
+    match /gelatoSync/{triggerId} {
+      allow read, write: if isAuth();
+    }
+
+    match /gelatoProductSync/{triggerId} {
+      allow read, write: if isAuth();
+    }
+
+    match /gelatoTemplateSync/{triggerId} {
+      allow read, write: if isAuth();
+    }
+
+    match /digitalPublishJobs/{jobId} {
+      allow read, write: if isAuth();
+    }
+
+    match /bundlePublishJobs/{jobId} {
+      allow read, write: if isAuth();
+    }
+
+    match /bundles/{bundleId} {
+      allow read, write: if isAuth();
+    }
+
+    match /editJobs/{jobId} {
+      allow read, write: if isAuth();
+    }
+
+    match /mugBatches/{batchId} {
+      allow read, write: if isAuth();
+    }
+
+    match /collections/{collectionId} {
+      allow read: if true;
+      allow write: if isAuth();
+    }
+
+    match /config/{configId} {
+      allow read, write: if isAuth();
+    }
+
+    match /collectionAnalysisJobs/{jobId} {
+      allow read, write: if isAuth();
+    }
+
+    match /collectionAnalyses/{analysisId} {
+      // Public site only needs SEO copy — internal analyses stay private
+      allow read: if resource.data.analysisType == "seo-description";
+      allow read, write: if isAuth();
+    }
+
+    match /knowledge/{docId} {
+      allow read, write: if isAuth();
+    }
+
+    match /marketingJobs/{jobId} {
+      allow read, write: if isAuth();
+    }
+
+    match /marketingAnalyses/{analysisId} {
+      // Public site only needs SEO copy — internal analyses stay private
+      allow read: if resource.data.analysisType == "seo-description";
+      allow read, write: if isAuth();
+    }
+
+    match /ideationCollections/{collectionId} {
+      allow read, write: if isAuth();
+
+      match /conversations/{messageId} {
+        allow read, write: if isAuth();
+      }
+    }
+  }
+}
