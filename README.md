@@ -149,3 +149,7 @@ Scripts that use the Admin SDK look for a service-account file such as `service-
 - The Firebase web API key in the built frontend is public by design. What protects your data is Firestore security and Auth settings, not that key.
 - The rules give full access to **any signed-in user**. Turn off public sign-up (**Authentication → Settings → User actions → uncheck "Enable create"**), or limit the rules to your own UID. Otherwise anyone could create an account and read your Gelato key and Etsy tokens from `config/*`, or queue paid generation jobs.
 - Third-party keys belong in Firebase Secret Manager (functions) or Firestore `config/*` (locked down by the rules), never in source code.
+
+## License
+
+The code is released under the [MIT License](LICENSE). The artwork, brand name and shop content are not covered by it.
