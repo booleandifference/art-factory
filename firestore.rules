@@ -1,9 +1,11 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Only authenticated users can read/write anything
+    // Single-user app: only the owner account can read/write.
+    // Sign-up is disabled in Firebase Auth too; this is the second layer.
     function isAuth() {
-      return request.auth != null;
+      return request.auth != null
+          && request.auth.uid == "PR7Tx31WwKQQyUbtEnvW4T5LNtn2";
     }
 
     match /concepts/{conceptId} {

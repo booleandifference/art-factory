@@ -1,21 +1,26 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Only authenticated users can read/write
+    // Single-user app: only the owner account can read/write
+    function isOwner() {
+      return request.auth != null
+          && request.auth.uid == "PR7Tx31WwKQQyUbtEnvW4T5LNtn2";
+    }
+
     match /images/{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isOwner();
     }
     match /thumbnails/{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isOwner();
     }
     match /upscaled/{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isOwner();
     }
     match /edits/{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isOwner();
     }
     match /videos/{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isOwner();
     }
   }
 }

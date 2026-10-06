@@ -59,8 +59,8 @@ You need Node.js 20, the Firebase CLI (`npm i -g firebase-tools`), and your own 
 ### 1. Install
 
 ```bash
-git clone https://github.com/booleandifference/art-factory.git
-cd art-factory
+git clone https://github.com/booleandifference/TheHoodieGamer.git
+cd TheHoodieGamer
 npm install
 cd functions && npm install && cd ..
 cd site && npm install && cd ..
@@ -147,7 +147,7 @@ Scripts that use the Admin SDK look for a service-account file such as `service-
 
 - **Never commit** `.env`, service-account JSON files, `product-book/` (which holds local Etsy tokens), `private/` or `functions/prompts/`. All of these are in `.gitignore`.
 - The Firebase web API key in the built frontend is public by design. What protects your data is Firestore security and Auth settings, not that key.
-- The rules give full access to **any signed-in user**. Turn off public sign-up (**Authentication → Settings → User actions → uncheck "Enable create"**), or limit the rules to your own UID. Otherwise anyone could create an account and read your Gelato key and Etsy tokens from `config/*`, or queue paid generation jobs.
+- The rules only allow the owner account (a hard-coded UID in `firestore.rules` and `storage.rules`). Replace it with your own UID, and turn off public sign-up too (**Authentication → Settings → User actions → uncheck "Enable create"**).
 - Third-party keys belong in Firebase Secret Manager (functions) or Firestore `config/*` (locked down by the rules), never in source code.
 
 ## License
