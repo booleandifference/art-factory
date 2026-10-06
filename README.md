@@ -59,8 +59,8 @@ You need Node.js 20, the Firebase CLI (`npm i -g firebase-tools`), and your own 
 ### 1. Install
 
 ```bash
-git clone https://github.com/booleandifference/TheHoodieGamer.git
-cd TheHoodieGamer
+git clone https://github.com/booleandifference/art-factory.git
+cd art-factory
 npm install
 cd functions && npm install && cd ..
 cd site && npm install && cd ..
