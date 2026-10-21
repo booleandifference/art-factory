@@ -1,5 +1,7 @@
 # The Hoodie Gamer — Art Factory
 
+> ▶ **[Watch the visual walkthrough](https://gamer-art-factory-app.web.app/walkthrough/)**: a narrated, animated tour of the dashboard, from concept to Etsy.
+
 An AI-powered art production machine for selling gaming-themed wall art and mugs on **Etsy**, printed and shipped by **Gelato**.
 
 The whole business runs from one React dashboard. It turns a concept into an AI-generated image, upscales it to print resolution, writes the listing copy with Claude, then publishes the product to Gelato for print-on-demand fulfilment and lists it on Etsy. No inventory, no manual design work, no copy-pasting listings.
