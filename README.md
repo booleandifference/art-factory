@@ -9,53 +9,56 @@ The whole business runs from one React dashboard. It turns a concept into an AI-
 ```mermaid
 flowchart TD
   subgraph IDEATE["1 · Ideate"]
-    concepts["Concept library<br/>themes · props · styles · chaos"]
-    chat["Ideation chat<br/>Claude / Gemini"]
-    builder["Prompt builder<br/>single · batch · mockups"]
+    concepts["👤 Concept library<br/>themes · props · styles · chaos"]
+    chat["✨ Ideation chat<br/>Claude / Gemini, you steer"]
+    builder["👤 Prompt builder<br/>single · batch · mockups"]
     concepts --> builder
     chat -- "use as prompt" --> builder
   end
 
   subgraph CREATE["2 · Generate & curate"]
-    gen["processJob<br/>fal.ai: Flux · SDXL · nano-banana"]
-    gallery["Gallery<br/>rate · tag · keep / reject"]
-    edit["processImageEdit<br/>AI edits (nano-banana edit)"]
-    mugs["Mug batch<br/>persona variants"]
+    gen["✨ processJob<br/>fal.ai: Flux · SDXL · nano-banana"]
+    gallery["👤 Gallery<br/>rate · tag · keep / reject"]
+    edit["✨ processImageEdit<br/>AI edits (nano-banana edit)"]
+    mugs["👤 Mug batch<br/>pick personas for variants"]
     gen --> gallery
     gallery <--> edit
     gallery --> mugs --> edit
   end
 
   subgraph VIDEO["3 · Video"]
-    vprompt["analyzeImageForVideo<br/>Claude Vision → Veo prompts"]
-    vcustom["Custom or manual prompt"]
-    veo["generateVideo<br/>Veo 3.1 image-to-video"]
-    vgallery["Video gallery · Batch video"]
+    vprompt["✨ analyzeImageForVideo<br/>Claude Vision → Veo prompts"]
+    vcustom["👤 Custom or manual prompt"]
+    veo["✨ generateVideo<br/>Veo 3.1 image-to-video"]
+    vgallery["👤 Video gallery · Batch video<br/>pick and download"]
     vprompt --> veo
     vcustom --> veo
     veo --> vgallery
   end
 
   subgraph READY["4 · Print-ready & copy"]
-    upscale["processUpscale<br/>seedvr 2× or 4× → A3 at 300 DPI<br/>sharp print file"]
-    listing["analyzeListing<br/>Claude Vision → title · tags · description"]
+    upscale["✨ processUpscale<br/>seedvr 2× or 4× → A3 at 300 DPI<br/>sharp print file"]
+    listing["✨ analyzeListing<br/>Claude Vision → title · tags · description"]
+    review["👤 Prepare listing<br/>review copy · pick template · publish"]
+    listing --> review
   end
 
   subgraph PUBLISH["5 · Publish"]
-    gelato["publishToGelato<br/>poster & mug templates"]
-    digital["publishDigitalToEtsy<br/>digital downloads"]
-    bundle["Bundle maker<br/>publishBundleToEtsy"]
+    gelato["⚙️ publishToGelato<br/>poster & mug templates"]
+    digital["⚙️ publishDigitalToEtsy<br/>digital downloads"]
+    bundle["👤 Bundle maker<br/>pick images → publishBundleToEtsy"]
   end
 
   subgraph MARKET["Marketing"]
-    analysis["analyzeCollection<br/>collection analysis"]
-    marketing["runMarketingAnalysis<br/>SEO · social copy"]
+    analysis["✨ analyzeCollection<br/>collection analysis"]
+    marketing["✨ runMarketingAnalysis<br/>SEO · social copy"]
     analysis --> marketing
   end
 
-  etsy[("Etsy shop")]
-  printing["Gelato prints & ships"]
-  site["Public storefront (site/)"]
+  etsy[("🏪 Etsy shop")]
+  aibox["👤 Etsy listing editor<br/>tick 'An AI generator' (no API for it)"]
+  printing["🏪 Gelato prints & ships"]
+  site["⚙️ Public storefront (site/)"]
 
   builder --> gen
   gallery -- "keep" --> upscale
@@ -63,16 +66,28 @@ flowchart TD
   gallery --> vprompt
   gallery --> analysis
   upscale --> gelato
-  listing --> gelato
-  listing --> digital
+  review --> gelato
+  review --> digital
   gallery --> bundle
   gelato -- "syncs listing" --> etsy
   digital --> etsy
   bundle --> etsy
+  aibox -. "AI disclosure" .-> etsy
   vgallery -. "listing video (manual upload)" .-> etsy
   etsy -- "orders" --> printing
   site -- "links to" --> etsy
+
+  classDef you fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+  classDef ai fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+  classDef auto fill:#f3f4f6,stroke:#6b7280,color:#111827
+  classDef ext fill:#fef3c7,stroke:#d97706,color:#78350f
+  class concepts,builder,gallery,mugs,vcustom,vgallery,review,bundle,aibox you
+  class chat,gen,edit,vprompt,veo,upscale,listing,analysis,marketing ai
+  class gelato,digital,site auto
+  class etsy,printing ext
 ```
+
+**Who does what:** 👤 **you** (blue) make the decisions: what to make, which images to keep, and what goes live. ✨ **AI** (purple) does the heavy lifting: images, edits, upscaling, video, and all the writing. ⚙️ **Automated** (grey) steps are plain code with no AI, and 🏪 Etsy and Gelato (amber) are the outside services.
 
 Every box named after a Cloud Function runs off a Firestore job queue: the dashboard writes a job document (for example `jobs/`, `upscaleJobs/`, `videoJobs/`, `publishJobs/`), and the function picks it up and moves it from `queued` to `processing` to `completed` or `failed`.
 
