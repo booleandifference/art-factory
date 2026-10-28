@@ -10,16 +10,16 @@ The whole business runs from one React dashboard. It turns a concept into an AI-
 flowchart TD
   subgraph IDEATE["1 · Ideate"]
     concepts["👤 Concept library<br/>themes · props · styles · chaos"]
-    chat["✨ Ideation chat<br/>Claude / Gemini, you steer"]
+    chat["🤖 Ideation chat<br/>Claude / Gemini, you steer"]
     builder["👤 Prompt builder<br/>single · batch · mockups"]
     concepts --> builder
     chat -- "use as prompt" --> builder
   end
 
   subgraph CREATE["2 · Generate & curate"]
-    gen["✨ processJob<br/>fal.ai: Flux · SDXL · nano-banana"]
+    gen["🤖 processJob<br/>fal.ai: Flux · SDXL · nano-banana"]
     gallery["👤 Gallery<br/>rate · tag · keep / reject"]
-    edit["✨ processImageEdit<br/>AI edits (nano-banana edit)"]
+    edit["🤖 processImageEdit<br/>AI edits (nano-banana edit)"]
     mugs["👤 Mug batch<br/>pick personas for variants"]
     gen --> gallery
     gallery <--> edit
@@ -27,9 +27,9 @@ flowchart TD
   end
 
   subgraph VIDEO["3 · Video"]
-    vprompt["✨ analyzeImageForVideo<br/>Claude Vision → Veo prompts"]
+    vprompt["🤖 analyzeImageForVideo<br/>Claude Vision → Veo prompts"]
     vcustom["👤 Custom or manual prompt"]
-    veo["✨ generateVideo<br/>Veo 3.1 image-to-video"]
+    veo["🤖 generateVideo<br/>Veo 3.1 image-to-video"]
     vgallery["👤 Video gallery · Batch video<br/>pick and download"]
     vprompt --> veo
     vcustom --> veo
@@ -37,8 +37,8 @@ flowchart TD
   end
 
   subgraph READY["4 · Print-ready & copy"]
-    upscale["✨ processUpscale<br/>seedvr 2× or 4× → A3 at 300 DPI<br/>sharp print file"]
-    listing["✨ analyzeListing<br/>Claude Vision → title · tags · description"]
+    upscale["🤖 processUpscale<br/>seedvr 2× or 4× → A3 at 300 DPI<br/>sharp print file"]
+    listing["🤖 analyzeListing<br/>Claude Vision → title · tags · description"]
     review["👤 Prepare listing<br/>review copy · pick template · publish"]
     listing --> review
   end
@@ -50,14 +50,14 @@ flowchart TD
   end
 
   subgraph MARKET["Marketing"]
-    analysis["✨ analyzeCollection<br/>collection analysis"]
-    marketing["✨ runMarketingAnalysis<br/>SEO · social copy"]
+    analysis["🤖 analyzeCollection<br/>collection analysis"]
+    marketing["🤖 runMarketingAnalysis<br/>SEO · social copy"]
     analysis --> marketing
   end
 
-  etsy[("🏪 Etsy shop")]
+  etsy[("🌐 Etsy shop")]
   aibox["👤 Etsy listing editor<br/>tick 'An AI generator' (no API for it)"]
-  printing["🏪 Gelato prints & ships"]
+  printing["🌐 Gelato prints & ships"]
   site["⚙️ Public storefront (site/)"]
 
   builder --> gen
@@ -85,9 +85,11 @@ flowchart TD
   class chat,gen,edit,vprompt,veo,upscale,listing,analysis,marketing ai
   class gelato,digital,site auto
   class etsy,printing ext
+  classDef section fill:#f9fafb,stroke:#9ca3af,color:#111827
+  class IDEATE,CREATE,VIDEO,READY,PUBLISH,MARKET section
 ```
 
-**Who does what:** 👤 **you** (blue) make the decisions: what to make, which images to keep, and what goes live. ✨ **AI** (purple) does the heavy lifting: images, edits, upscaling, video, and all the writing. ⚙️ **Automated** (grey) steps are plain code with no AI, and 🏪 Etsy and Gelato (amber) are the outside services.
+**Who does what:** 👤 **you** (blue) make the decisions: what to make, which images to keep, and what goes live. 🤖 **AI** (purple) does the heavy lifting: images, edits, upscaling, video, and all the writing. ⚙️ **Automated** (grey) steps are plain code with no AI, and 🌐 Etsy and Gelato (amber) are the outside services.
 
 Every box named after a Cloud Function runs off a Firestore job queue: the dashboard writes a job document (for example `jobs/`, `upscaleJobs/`, `videoJobs/`, `publishJobs/`), and the function picks it up and moves it from `queued` to `processing` to `completed` or `failed`.
 
