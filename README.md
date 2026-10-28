@@ -6,25 +6,90 @@ An AI-powered art production machine for selling gaming-themed wall art and mugs
 
 The whole business runs from one React dashboard. It turns a concept into an AI-generated image, upscales it to print resolution, writes the listing copy with Claude, then publishes the product to Gelato for print-on-demand fulfilment and lists it on Etsy. No inventory, no manual design work, no copy-pasting listings.
 
+```mermaid
+flowchart TD
+  subgraph IDEATE["1 · Ideate"]
+    concepts["Concept library<br/>themes · props · styles · chaos"]
+    chat["Ideation chat<br/>Claude / Gemini"]
+    builder["Prompt builder<br/>single · batch · mockups"]
+    concepts --> builder
+    chat -- "use as prompt" --> builder
+  end
+
+  subgraph CREATE["2 · Generate & curate"]
+    gen["processJob<br/>fal.ai: Flux · SDXL · nano-banana"]
+    gallery["Gallery<br/>rate · tag · keep / reject"]
+    edit["processImageEdit<br/>AI edits (nano-banana edit)"]
+    mugs["Mug batch<br/>persona variants"]
+    gen --> gallery
+    gallery <--> edit
+    gallery --> mugs --> edit
+  end
+
+  subgraph VIDEO["3 · Video"]
+    vprompt["analyzeImageForVideo<br/>Claude Vision → Veo prompts"]
+    vcustom["Custom or manual prompt"]
+    veo["generateVideo<br/>Veo 3.1 image-to-video"]
+    vgallery["Video gallery · Batch video"]
+    vprompt --> veo
+    vcustom --> veo
+    veo --> vgallery
+  end
+
+  subgraph READY["4 · Print-ready & copy"]
+    upscale["processUpscale<br/>seedvr 2× or 4× → A3 at 300 DPI<br/>sharp print file"]
+    listing["analyzeListing<br/>Claude Vision → title · tags · description"]
+  end
+
+  subgraph PUBLISH["5 · Publish"]
+    gelato["publishToGelato<br/>poster & mug templates"]
+    digital["publishDigitalToEtsy<br/>digital downloads"]
+    bundle["Bundle maker<br/>publishBundleToEtsy"]
+  end
+
+  subgraph MARKET["Marketing"]
+    analysis["analyzeCollection<br/>collection analysis"]
+    marketing["runMarketingAnalysis<br/>SEO · social copy"]
+    analysis --> marketing
+  end
+
+  etsy[("Etsy shop")]
+  printing["Gelato prints & ships"]
+  site["Public storefront (site/)"]
+
+  builder --> gen
+  gallery -- "keep" --> upscale
+  gallery -- "keep" --> listing
+  gallery --> vprompt
+  gallery --> analysis
+  upscale --> gelato
+  listing --> gelato
+  listing --> digital
+  gallery --> bundle
+  gelato -- "syncs listing" --> etsy
+  digital --> etsy
+  bundle --> etsy
+  vgallery -. "listing video (manual upload)" .-> etsy
+  etsy -- "orders" --> printing
+  site -- "links to" --> etsy
 ```
- Concept library ─▶ Prompt builder ─▶ Generate (fal.ai) ─▶ Curate (keep / reject)
-                                                               │
-             Etsy listing ◀─ Gelato product ◀─ Listing copy (Claude) ◀─ 4× upscale
-```
+
+Every box named after a Cloud Function runs off a Firestore job queue: the dashboard writes a job document (for example `jobs/`, `upscaleJobs/`, `videoJobs/`, `publishJobs/`), and the function picks it up and moves it from `queued` to `processing` to `completed` or `failed`.
 
 ## How it works
 
 1. **Ideate.** A concept library (themes, props, body types, styles, "chaos" level) and an AI ideation chat plan new collections.
 2. **Assemble prompts.** The prompt builder combines concepts into image prompts, one at a time or as batches.
 3. **Generate.** Cloud Functions send the jobs to fal.ai (Flux, SDXL, nano-banana) and save the results to Firebase Storage.
-4. **Curate.** In the gallery you rate, filter and tag images with keyboard shortcuts, and can make light edits (brightness, contrast, crop).
-5. **Make print-ready.** Images are upscaled 4× with seedvr and converted with `sharp`. Gelato publishing refuses anything that isn't 4× upscaled.
+4. **Curate.** In the gallery you rate, filter and tag images with keyboard shortcuts, and can make AI edits from a text instruction (nano-banana edit). The mug batch turns approved personas into style and appearance variants the same way.
+5. **Make print-ready.** Images are upscaled with seedvr and converted with `sharp`: 4× for small sources, 2× for 2K sources, which already clears A3 at 300 DPI. Gelato publishing refuses images that are neither 4× upscaled nor at least 4352 px on the long edge.
 6. **Write the listing.** Claude Vision looks at each image and writes the Etsy title, description and tags. Gemini is the fallback.
 7. **Publish.**
    - **Physical products** (posters and wall art, plus mugs in a separate store) are created in Gelato from product templates. Gelato then syncs them to the connected Etsy shop and handles printing and shipping.
    - **Digital downloads and bundles** are published straight to Etsy through its API (OAuth 2.0 + PKCE).
-8. **Market.** Agents analyse whole collections and write SEO copy and social posts. Veo 3.1 makes short product videos from the artwork.
-9. **Storefront.** A separate public site (`site/`) shows published collections and links through to Etsy.
+8. **Make videos.** Claude Vision looks at an image and suggests motion prompts (or you write your own), then Veo 3.1 turns the artwork into a short product video. Videos land in the video gallery, one at a time or in batches, ready to download for Etsy listings and social media.
+9. **Market.** Agents analyse whole collections and write SEO copy and social posts.
+10. **Storefront.** A separate public site (`site/`) shows published collections and links through to Etsy.
 
 ## Tech stack
 
