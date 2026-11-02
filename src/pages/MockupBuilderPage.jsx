@@ -1,8 +1,10 @@
 import { useState, useMemo } from 'react'
+import toast from 'react-hot-toast'
 import PageHeader from '../components/common/PageHeader'
 import Button from '../components/common/Button'
 import ConceptPicker from '../components/PromptBuilder/ConceptPicker'
 import { useCollection, useFirestoreCrud } from '../hooks/useFirestore'
+import { useCollections } from '../hooks/useCollections'
 import {
   assembleMockupPrompt,
   generateMockupPromptName,
@@ -11,6 +13,18 @@ import {
   isNanoBanana,
   NANO_RESOLUTIONS,
 } from '../lib/promptAssembler'
+
+// Artwork photos sent to nano-banana-2/edit (fal.ai allows more, but quality drops past a handful)
+const MAX_ARTWORKS = 5
+const EDIT_MODEL = 'fal-ai/nano-banana-2/edit'
+
+// Prefix that tells the edit model to place the attached artwork, untouched, into the scene
+function artworkInstruction(count) {
+  const what = count === 1
+    ? 'the provided artwork image as a framed print'
+    : `the ${count} provided artwork images as framed prints, one frame per image`
+  return `Create a photorealistic interior photo that shows ${what}, placed as the scene describes. Reproduce the artwork exactly as given: do not redraw, recolor, crop or add anything to it. Scene: `
+}
 
 export default function MockupBuilderPage() {
   const { documents: concepts } = useCollection('concepts', [], 'createdAt')
@@ -28,6 +42,9 @@ export default function MockupBuilderPage() {
   const [resolution, setResolution] = useState('2K')
   const [negativePrompt, setNegativePrompt] = useState('blurry, low quality, cartoon, illustration, painting')
   const [tab, setTab] = useState('build') // 'build' | 'saved'
+  const [artworks, setArtworks] = useState([]) // selected images: { id, url }
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const usesArtwork = artworks.length > 0
 
   // Group concepts by type
   const byType = useMemo(() => {
@@ -41,10 +58,22 @@ export default function MockupBuilderPage() {
 
   const selections = { camera, mockupRoom, mockupSize, mockupLighting }
 
-  const nanoPrompt = useMemo(
+  const scenePrompt = useMemo(
     () => assembleMockupPrompt(selections),
     [camera, mockupRoom, mockupSize, mockupLighting]
   )
+  const nanoPrompt = usesArtwork ? artworkInstruction(artworks.length) + scenePrompt : scenePrompt
+
+  const toggleArtwork = (img) => {
+    setArtworks((prev) => {
+      if (prev.some((a) => a.id === img.id)) return prev.filter((a) => a.id !== img.id)
+      if (prev.length >= MAX_ARTWORKS) {
+        toast.error(`Up to ${MAX_ARTWORKS} artworks per mockup`)
+        return prev
+      }
+      return [...prev, { id: img.id, url: img.url }]
+    })
+  }
 
   const promptName = useMemo(() => generateMockupPromptName(selections), [mockupRoom, mockupSize])
 
@@ -76,6 +105,19 @@ export default function MockupBuilderPage() {
   }
 
   const handleGenerate = async (variants = 1) => {
+    setIsSubmitting(true)
+    try {
+      await submitJob(variants)
+      toast.success(`Mockup${variants > 1 ? 's' : ''} queued — results land in Mockup Gallery`)
+    } catch (err) {
+      toast.error(`Could not queue mockup: ${err.message}`)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const submitJob = async (variants) => {
+    const jobModel = usesArtwork ? EDIT_MODEL : model
     const promptId = await promptsCrud.add({
       name: promptName,
       nanoPrompt,
@@ -89,8 +131,9 @@ export default function MockupBuilderPage() {
       },
       etsyTags: etsyTagString,
       formatParams: { aspectRatio: '1:1', orientation: 'square', size: 'mockup' },
-      model,
+      model: jobModel,
       negativePrompt,
+      referenceImageIds: artworks.map((a) => a.id),
       generationCount: 0,
       bestImageId: null,
       status: 'active',
@@ -100,7 +143,8 @@ export default function MockupBuilderPage() {
       promptId,
       promptText: nanoPrompt,
       category: 'mockup',
-      model,
+      model: jobModel,
+      referenceImageIds: artworks.map((a) => a.id),
       modelParams: { ...DEFAULT_MODEL_PARAMS, aspectRatio: '1:1', resolution, width: 1024, height: 1024 },
       variants,
       status: 'queued',
@@ -155,6 +199,7 @@ export default function MockupBuilderPage() {
         <div className="flex-1 overflow-auto flex">
           {/* Left: pickers */}
           <div className="w-2/3 p-6 space-y-5 overflow-auto border-r" style={{ borderColor: 'var(--color-border)' }}>
+            <ArtworkPicker selected={artworks} onToggle={toggleArtwork} onClear={() => setArtworks([])} />
             <ConceptPicker label="Camera - Mockup" concepts={byType.cameraMockup || []} selected={camera} onSelect={setCamera} />
             <ConceptPicker label="Room Scene" concepts={byType.mockupRoom || []} selected={mockupRoom} onSelect={setMockupRoom} />
             <ConceptPicker label="Size Display" concepts={byType.mockupSize || []} selected={mockupSize} onSelect={setMockupSize} />
@@ -187,14 +232,20 @@ export default function MockupBuilderPage() {
 
             <div>
               <label className="block text-xs mb-1" style={{ color: 'var(--color-text-muted)' }}>Model</label>
-              <select value={model} onChange={(e) => setModel(e.target.value)} className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle}>
-                {FAL_MODELS.map((m) => (
-                  <option key={m.id} value={m.id}>{m.name} — {m.description}</option>
-                ))}
-              </select>
+              {usesArtwork ? (
+                <p className="px-3 py-2 rounded-lg text-sm" style={inputStyle}>
+                  Nano Banana 2 Edit — places your {artworks.length} artwork{artworks.length > 1 ? 's' : ''} in the room
+                </p>
+              ) : (
+                <select value={model} onChange={(e) => setModel(e.target.value)} className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle}>
+                  {FAL_MODELS.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name} — {m.description}</option>
+                  ))}
+                </select>
+              )}
             </div>
 
-            {isNanoBanana(model) && (
+            {(usesArtwork || isNanoBanana(model)) && (
               <div>
                 <label className="block text-xs mb-1" style={{ color: 'var(--color-text-muted)' }}>Resolution</label>
                 <select value={resolution} onChange={(e) => setResolution(e.target.value)} className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle}>
@@ -205,7 +256,7 @@ export default function MockupBuilderPage() {
               </div>
             )}
 
-            <div>
+            {!usesArtwork && <div>
               <label className="block text-xs mb-1" style={{ color: 'var(--color-text-muted)' }}>Negative Prompt</label>
               <textarea
                 value={negativePrompt}
@@ -215,13 +266,13 @@ export default function MockupBuilderPage() {
                 className="w-full px-3 py-2 rounded-lg text-sm resize-none"
                 style={inputStyle}
               />
-            </div>
+            </div>}
 
             <div className="flex flex-col gap-2 mt-auto">
-              <Button onClick={() => handleGenerate(1)} disabled={!mockupRoom}>
-                Generate 1 Mockup
+              <Button onClick={() => handleGenerate(1)} disabled={!mockupRoom || isSubmitting}>
+                {isSubmitting ? 'Sending…' : 'Generate 1 Mockup'}
               </Button>
-              <Button variant="secondary" onClick={() => handleGenerate(4)} disabled={!mockupRoom}>
+              <Button variant="secondary" onClick={() => handleGenerate(4)} disabled={!mockupRoom || isSubmitting}>
                 Generate 4 Variants
               </Button>
               <Button variant="ghost" size="sm" onClick={handleSavePrompt} disabled={!mockupRoom}>
@@ -265,6 +316,83 @@ export default function MockupBuilderPage() {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// Pick approved ("keep") images from a collection to place in the mockup
+function ArtworkPicker({ selected, onToggle, onClear }) {
+  const { collections } = useCollections()
+  const [collectionSlug, setCollectionSlug] = useState('')
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+          Artwork <span style={{ color: 'var(--color-text-muted)' }}>· optional, up to {MAX_ARTWORKS} · {selected.length} selected</span>
+        </h3>
+        {selected.length > 0 && (
+          <button onClick={onClear} className="text-xs cursor-pointer" style={{ color: 'var(--color-text-muted)' }}>Clear</button>
+        )}
+      </div>
+
+      {selected.length > 0 && (
+        <div className="flex gap-2 mb-3">
+          {selected.map((a, i) => (
+            <button key={a.id} onClick={() => onToggle(a)} title="Remove" className="relative w-16 h-16 rounded overflow-hidden cursor-pointer border-2" style={{ borderColor: 'var(--color-primary)' }}>
+              <img src={a.url} alt="" className="w-full h-full object-cover" />
+              <span className="absolute top-0.5 left-0.5 text-[10px] px-1 rounded" style={{ backgroundColor: 'var(--color-primary)', color: '#fff' }}>{i + 1}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <select
+        value={collectionSlug}
+        onChange={(e) => setCollectionSlug(e.target.value)}
+        className="w-full px-3 py-2 rounded-lg text-sm"
+        style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
+      >
+        <option value="">Choose a collection to pick approved images…</option>
+        {collections.map((c) => (
+          <option key={c.slug || c.id} value={c.slug || c.id}>{c.name}</option>
+        ))}
+      </select>
+
+      {collectionSlug && <ApprovedImageGrid collectionSlug={collectionSlug} selected={selected} onToggle={onToggle} />}
+    </div>
+  )
+}
+
+// Mounted only once a collection is chosen, so we never subscribe to every image
+function ApprovedImageGrid({ collectionSlug, selected, onToggle }) {
+  const { documents: images, loading } = useCollection(
+    'images',
+    [{ field: 'collection', op: '==', value: collectionSlug }, { field: 'rating', op: '==', value: 'keep' }],
+    null
+  )
+
+  if (loading) return <p className="text-xs mt-2" style={{ color: 'var(--color-text-muted)' }}>Loading…</p>
+  if (images.length === 0) return <p className="text-xs mt-2" style={{ color: 'var(--color-text-muted)' }}>No approved images in this collection.</p>
+
+  return (
+    <div className="grid grid-cols-6 gap-2 mt-2 max-h-72 overflow-auto">
+      {images.map((img) => {
+        const index = selected.findIndex((a) => a.id === img.id)
+        return (
+          <button
+            key={img.id}
+            onClick={() => onToggle(img)}
+            className="relative aspect-[3/4] rounded overflow-hidden cursor-pointer border-2"
+            style={{ borderColor: index >= 0 ? 'var(--color-primary)' : 'transparent' }}
+          >
+            <img src={img.url} alt="" loading="lazy" className="w-full h-full object-cover" />
+            {index >= 0 && (
+              <span className="absolute top-1 left-1 text-[10px] px-1.5 rounded" style={{ backgroundColor: 'var(--color-primary)', color: '#fff' }}>{index + 1}</span>
+            )}
+          </button>
+        )
+      })}
     </div>
   )
 }

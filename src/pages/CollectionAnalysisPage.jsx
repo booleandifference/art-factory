@@ -18,8 +18,9 @@ const ANALYSIS_TYPES = [
 ]
 
 const MODELS = [
-  { id: 'claude-sonnet-5', label: 'Claude Sonnet 5' },
-  { id: 'claude-opus-4-8', label: 'Claude Opus 4.8' },
+  { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5' },
+  { id: 'claude-opus-5-5', label: 'Claude Opus 5.5' },
+  { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5' },
   { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
 ]
 
@@ -83,7 +84,7 @@ export default function CollectionAnalysisPage() {
   const { collections, loading: collectionsLoading } = useCollections()
   const [selectedSlug, setSelectedSlug] = useState('')
   const [selectedType, setSelectedType] = useState('')
-  const [selectedModel, setSelectedModel] = useState('claude-sonnet-5')
+  const [selectedModel, setSelectedModel] = useState('claude-sonnet-5-5')
   const [activeJobId, setActiveJobId] = useState(null)
 
   const selectedCollection = useMemo(

@@ -71,6 +71,10 @@ service cloud.firestore {
       allow read, write: if isAuth();
     }
 
+    match /bundleListingJobs/{jobId} {
+      allow read, write: if isAuth();
+    }
+
     match /bundles/{bundleId} {
       allow read, write: if isAuth();
     }

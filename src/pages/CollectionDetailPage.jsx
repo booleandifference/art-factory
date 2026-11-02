@@ -14,16 +14,65 @@ import {
   NANO_RESOLUTIONS,
 } from '../lib/promptAssembler';
 
+// Draggable top/bottom split inside a panel. Returns the top section's height in %,
+// a ref for the panel, and a mousedown handler for the drag handle.
+function useVerticalSplit(storageKey, defaultPercent) {
+  const [topPercent, setTopPercent] = useState(() => {
+    const saved = localStorage.getItem(storageKey);
+    return saved ? parseFloat(saved) : defaultPercent;
+  });
+  const panelRef = useRef(null);
+
+  const startDrag = (e) => {
+    e.preventDefault();
+    let latest = topPercent;
+
+    const handleMouseMove = (ev) => {
+      if (!panelRef.current) return;
+      const rect = panelRef.current.getBoundingClientRect();
+      latest = Math.min(85, Math.max(15, ((ev.clientY - rect.top) / rect.height) * 100));
+      setTopPercent(latest);
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      localStorage.setItem(storageKey, latest.toString());
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
+  return [topPercent, panelRef, startDrag];
+}
+
+function RowResizeHandle({ onMouseDown }) {
+  return (
+    <div
+      onMouseDown={onMouseDown}
+      className="h-2 flex-shrink-0 cursor-row-resize flex items-center justify-center"
+      style={{ backgroundColor: 'var(--color-border)' }}
+    >
+      <div className="h-px w-8 bg-gray-500"></div>
+    </div>
+  );
+}
+
 export default function CollectionDetailPage() {
   const { collectionId } = useParams();
   const { document: collection, loading: collectionLoading } = useDocument('ideationCollections', collectionId);
   const { documents: rawMessages, loading: messagesLoading } = useCollection(`ideationCollections/${collectionId}/conversations`, [], 'timestamp');
   const messages = [...rawMessages].reverse(); // Hook sorts desc, chat needs asc
   const { documents: collectionImages, loading: imagesLoading } = useCollection('images', [{ field: 'ideationCollectionId', op: '==', value: collectionId }], 'createdAt');
+  // No sort field: equality-only query needs no composite index; there are few jobs per collection
+  const { documents: collectionJobs } = useCollection('jobs', [{ field: 'ideationCollectionId', op: '==', value: collectionId }], null);
+  const activeJobs = collectionJobs.filter((j) => j.status === 'queued' || j.status === 'processing');
+  const pendingImageCount = activeJobs.reduce((sum, j) => sum + (j.variants || 1), 0);
   const conversationsCrud = useFirestoreCrud(`ideationCollections/${collectionId}/conversations`);
   const jobsCrud = useFirestoreCrud('jobs');
   const [input, setInput] = useState('');
-  const [selectedModel, setSelectedModel] = useState('claude-sonnet-5');
+  const [selectedModel, setSelectedModel] = useState('claude-sonnet-5-5');
   // Image generation state
   const [imagePrompt, setImagePrompt] = useState('');
   const [imageModel, setImageModel] = useState('fal-ai/nano-banana-2');
@@ -31,12 +80,16 @@ export default function CollectionDetailPage() {
   const [resolution, setResolution] = useState('2K');
   const [negativePrompt, setNegativePrompt] = useState('');
   const [variants, setVariants] = useState(1);
+  const [isSubmittingJob, setIsSubmittingJob] = useState(false);
+  const jobStatusRef = useRef(null);
   const [dividerPosition, setDividerPosition] = useState(() => {
     const saved = localStorage.getItem('promptBuilderDividerPosition');
     return saved ? parseFloat(saved) : 50;
   });
   const containerRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const [chatSplit, chatPanelRef, startChatSplitDrag] = useVerticalSplit('promptBuilderChatSplit', 75);
+  const [imageSplit, imagePanelRef, startImageSplitDrag] = useVerticalSplit('promptBuilderImageSplit', 40);
 
   const isThinking = !messagesLoading && messages.length > 0 && messages[messages.length - 1].role === 'user';
 
@@ -47,6 +100,19 @@ export default function CollectionDetailPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Toast when a job we saw running finishes. The first snapshot only records statuses.
+  useEffect(() => {
+    const previous = jobStatusRef.current;
+    jobStatusRef.current = Object.fromEntries(collectionJobs.map((j) => [j.id, j.status]));
+    if (!previous) return;
+    for (const job of collectionJobs) {
+      const was = previous[job.id];
+      if (was !== 'queued' && was !== 'processing') continue;
+      if (job.status === 'completed') toast.success('Images ready');
+      if (job.status === 'failed') toast.error(`Generation failed${job.error ? `: ${job.error}` : ''}`);
+    }
+  }, [collectionJobs]);
 
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -92,24 +158,31 @@ export default function CollectionDetailPage() {
   };
 
   const handleGenerateImage = async () => {
-    if (!imagePrompt.trim()) return;
+    if (!imagePrompt.trim() || isSubmittingJob) return;
 
-    await jobsCrud.add({
-      promptId: null,
-      ideationCollectionId: collectionId,
-      promptText: imagePrompt.trim(),
-      model: imageModel,
-      modelParams: { ...DEFAULT_MODEL_PARAMS, aspectRatio, resolution },
-      negativePrompt: negativePrompt || null,
-      variants,
-      status: 'queued',
-      error: null,
-      imageIds: [],
-      cost: 0,
-      startedAt: null,
-      completedAt: null,
-    });
-    toast.success(`${variants} image${variants > 1 ? 's' : ''} sent to queue!`);
+    setIsSubmittingJob(true);
+    try {
+      await jobsCrud.add({
+        promptId: null,
+        ideationCollectionId: collectionId,
+        promptText: imagePrompt.trim(),
+        model: imageModel,
+        modelParams: { ...DEFAULT_MODEL_PARAMS, aspectRatio, resolution },
+        negativePrompt: negativePrompt || null,
+        variants,
+        status: 'queued',
+        error: null,
+        imageIds: [],
+        cost: 0,
+        startedAt: null,
+        completedAt: null,
+      });
+      toast.success(`${variants} image${variants > 1 ? 's' : ''} sent to queue!`);
+    } catch (err) {
+      toast.error(`Could not queue job: ${err.message}`);
+    } finally {
+      setIsSubmittingJob(false);
+    }
   };
 
   const handleCopyToPrompt = (text) => {
@@ -126,15 +199,16 @@ export default function CollectionDetailPage() {
   }
 
   return (
-    <div className="h-full flex flex-col">
+    // h-screen (not h-full): the layout only sets min-h-screen, so the split panels need a fixed height to resize within
+    <div className="h-screen flex flex-col">
       <PageHeader
         title={collection.name}
         description={`Images generated: ${collectionImages.length}`}
       />
       <div ref={containerRef} className="flex-grow flex overflow-hidden">
         {/* Left Panel: Chat */}
-        <div style={{ width: `${dividerPosition}%` }} className="h-full flex flex-col overflow-hidden">
-          <div className="flex-grow p-6 overflow-y-auto space-y-4 pr-2">
+        <div ref={chatPanelRef} style={{ width: `${dividerPosition}%` }} className="h-full flex flex-col overflow-hidden">
+          <div className="flex-shrink-0 p-6 overflow-y-auto space-y-4 pr-2" style={{ height: `${chatSplit}%` }}>
             {messagesLoading && <Spinner />}
             {messages.map((msg, index) => {
               const isLastMessage = index === messages.length - 1;
@@ -176,8 +250,9 @@ export default function CollectionDetailPage() {
             )}
             <div ref={messagesEndRef} />
           </div>
-          <div className="p-4 border-t border-white/10">
-            <form onSubmit={handleSendMessage} className="flex flex-col gap-2">
+          <RowResizeHandle onMouseDown={startChatSplitDrag} />
+          <div className="flex-1 min-h-0 p-4 flex flex-col">
+            <form onSubmit={handleSendMessage} className="flex-1 min-h-0 flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 <select
                   value={selectedModel}
@@ -186,9 +261,9 @@ export default function CollectionDetailPage() {
                   style={{ backgroundColor: 'var(--color-surface-alt)', border: '1px solid var(--color-border)' }}
                   disabled={messagesLoading || isThinking}
                 >
-                  <option value="claude-sonnet-5">Claude Sonnet 5</option>
-                  <option value="claude-opus-4-8">Claude Opus 4.8</option>
-                  <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+                  <option value="claude-sonnet-5-5">Claude Sonnet 5.5</option>
+                  <option value="claude-opus-5-5">Claude Opus 5.5</option>
+                  <option value="claude-haiku-5-5">Claude Haiku 5.5</option>
                   <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                 </select>
                 <Button type="submit" disabled={!input.trim() || messagesLoading || isThinking}>
@@ -201,8 +276,8 @@ export default function CollectionDetailPage() {
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(e); } }}
                 placeholder="Start your prompt here... (Shift+Enter for new line)"
                 rows={3}
-                className="w-full p-2 rounded-lg text-white resize-y"
-                style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', minHeight: '60px', maxHeight: '200px' }}
+                className="w-full flex-1 p-2 rounded-lg text-white resize-none"
+                style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', minHeight: '60px' }}
                 disabled={messagesLoading || isThinking}
               />
             </form>
@@ -215,14 +290,33 @@ export default function CollectionDetailPage() {
         </div>
 
         {/* Right Panel: Image Generation */}
-        <div style={{ width: `calc(100% - ${dividerPosition}%)` }} className="h-full flex flex-col">
-          {/* Generated images — scrollable top area */}
-          {collectionImages.length > 0 && (
-            <div className="flex-shrink-0 overflow-y-auto p-6 pb-2" style={{ maxHeight: '40%' }}>
+        <div ref={imagePanelRef} style={{ width: `calc(100% - ${dividerPosition}%)` }} className="h-full flex flex-col">
+          {/* Generated images — scrollable top area, resizable via the handle below */}
+          {(collectionImages.length > 0 || pendingImageCount > 0) && (
+            <div className="flex-shrink-0 overflow-y-auto p-6 pb-2" style={{ height: `${imageSplit}%` }}>
               <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text-muted)' }}>
                 Generated Images ({collectionImages.length})
+                {pendingImageCount > 0 && (
+                  <span className="ml-2 font-normal" style={{ color: 'var(--color-primary)' }}>
+                    · {pendingImageCount} generating…
+                  </span>
+                )}
               </h3>
               <div className="grid grid-cols-2 gap-2">
+                {activeJobs.flatMap((job) =>
+                  Array.from({ length: job.variants || 1 }, (_, i) => (
+                    <div
+                      key={`${job.id}-${i}`}
+                      className="w-full aspect-[2/3] rounded-lg animate-pulse flex flex-col items-center justify-center gap-2"
+                      style={{ backgroundColor: 'var(--color-surface-hover)', border: '1px solid var(--color-border)' }}
+                    >
+                      <Spinner />
+                      <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                        {job.status === 'processing' ? 'Generating…' : 'Queued'}
+                      </span>
+                    </div>
+                  ))
+                )}
                 {collectionImages.map((image) => (
                   <Link to={`/gallery?selected=${image.id}`} key={image.id}>
                     <img src={image.url} alt={image.promptText} className="w-full h-auto object-cover rounded-lg aspect-[2/3] hover:opacity-80 transition-opacity" />
@@ -231,22 +325,23 @@ export default function CollectionDetailPage() {
               </div>
             </div>
           )}
+          {(collectionImages.length > 0 || pendingImageCount > 0) && <RowResizeHandle onMouseDown={startImageSplitDrag} />}
 
-          {/* Image builder form — pinned to bottom */}
-          <div className="mt-auto p-6 pt-4 flex flex-col gap-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
+          {/* Image builder form — fills the space below the images */}
+          <div className="flex-1 min-h-0 overflow-y-auto p-6 pt-4 flex flex-col gap-3">
             <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text-muted)' }}>Image Prompt</h3>
             <textarea
               value={imagePrompt}
               onChange={(e) => setImagePrompt(e.target.value)}
               placeholder="Paste or type your image generation prompt here..."
               rows={4}
-              className="w-full p-3 rounded-lg text-sm resize-y"
-              style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)', minHeight: '60px', maxHeight: '160px' }}
+              className="w-full flex-1 p-3 rounded-lg text-sm resize-none"
+              style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)', minHeight: '60px' }}
             />
 
             <div className="flex gap-2">
-              <Button onClick={handleGenerateImage} disabled={!imagePrompt.trim()} className="flex-1">
-                Generate {variants} {variants === 1 ? 'Image' : 'Images'}
+              <Button onClick={handleGenerateImage} disabled={!imagePrompt.trim() || isSubmittingJob} className="flex-1">
+                {isSubmittingJob ? 'Sending…' : `Generate ${variants} ${variants === 1 ? 'Image' : 'Images'}`}
               </Button>
               <select
                 value={variants}

@@ -69,7 +69,22 @@ const ASPECT_RATIO_MAP = {
   "1:1": "1:1",
 };
 
-function buildInput(job, seed) {
+function buildInput(job, seed, referenceUrls = []) {
+  if (referenceUrls.length > 0) {
+    // Nano Banana 2 Edit: places the reference images (e.g. artwork in a mockup room)
+    return {
+      prompt: job.promptText,
+      image_urls: referenceUrls,
+      num_images: 1,
+      seed,
+      aspect_ratio: ASPECT_RATIO_MAP[job.modelParams?.aspectRatio] || "auto",
+      output_format: "png",
+      resolution: job.modelParams?.resolution || "2K",
+      safety_tolerance: "4",
+      thinking_level: "high",
+    };
+  }
+
   if (isNanoBanana(job.model)) {
     // Nano Banana 2 (Gemini) uses aspect_ratio + resolution instead of pixel dimensions
     return {
@@ -152,12 +167,24 @@ exports.processJob = onDocumentCreated(
       const imageIds = [];
       let totalCost = 0;
 
+      // Reference images (Mockup Builder artwork) — upload once, reuse for every variant
+      const referenceImageIds = job.referenceImageIds || [];
+      const referenceUrls = [];
+      for (const refId of referenceImageIds) {
+        const refDoc = await db.collection("images").doc(refId).get();
+        if (!refDoc.exists) throw new Error(`Reference image ${refId} not found`);
+        const refPath = refDoc.data().storagePath;
+        if (!refPath) throw new Error(`Reference image ${refId} has no storagePath`);
+        const [refBuffer] = await bucket.file(refPath).download();
+        referenceUrls.push(await fal.storage.upload(new Blob([refBuffer], { type: "image/jpeg" })));
+      }
+
       for (let i = 0; i < variants; i++) {
         const seed = job.modelParams?.seed || Math.floor(Math.random() * 2147483647);
-        const model = job.model || "fal-ai/flux/dev";
+        const model = referenceUrls.length > 0 ? "fal-ai/nano-banana-2/edit" : (job.model || "fal-ai/flux/dev");
 
         const result = await fal.subscribe(model, {
-          input: buildInput(job, seed),
+          input: buildInput(job, seed, referenceUrls),
           logs: true,
           onQueueUpdate: (update) => {
             if (update.status === "IN_PROGRESS") {
@@ -196,6 +223,7 @@ exports.processJob = onDocumentCreated(
           ideationCollectionId: job.ideationCollectionId || null,
           promptText: job.promptText || "",
           category: job.category || "art",
+          referenceImageIds,
           storagePath,
           storagePathUpscaled: null,
           thumbnailPath: storagePath,
@@ -943,9 +971,16 @@ exports.publishToGelato = onDocumentCreated(
         throw new Error("No listing data found — run AI analysis first");
       }
 
-      // Require 4x upscale before publishing to Gelato
-      if (!image.upscaled || (image.upscaleScale || 0) < 4) {
-        throw new Error(`Image must be 4x upscaled before publishing. Current: ${image.upscaleScale || 'not upscaled'}x`);
+      // Require a print-resolution upscale before publishing to Gelato: either a 4x upscale,
+      // or a 2x upscale of a large (2K) source — processUpscale picks 2x for those, and it
+      // still lands above A3. 4352px = long edge of a 4x upscale of the 768×1088 base size.
+      const MIN_PRINT_LONG_EDGE = 4352;
+      const upscaledLongEdge = Math.max(image.upscaledWidth || 0, image.upscaledHeight || 0);
+      if (!image.upscaled) {
+        throw new Error("Image must be upscaled before publishing — run Upscale first");
+      }
+      if ((image.upscaleScale || 0) < 4 && upscaledLongEdge < MIN_PRINT_LONG_EDGE) {
+        throw new Error(`Upscaled image is too small to print (${image.upscaleScale}x, long edge ${upscaledLongEdge || "unknown"}px) — needs a 4x upscale or a long edge of ${MIN_PRINT_LONG_EDGE}px`);
       }
 
       // Get Gelato config from Firestore
@@ -1748,6 +1783,76 @@ exports.publishDigitalToEtsy = onDocumentCreated(
       await db.collection("images").doc(job.imageId).update({
         "listing.digitalStatus": "failed",
       }).catch(() => {});
+    }
+  }
+);
+
+// ─── Bundle listing copy (Claude) ────────────────────────────────────────────
+// Bundle Maker writes a job; Claude runs here so the API key never reaches the browser.
+
+const BUNDLE_LISTING_SYSTEM_PROMPT = `You are a listing copywriter for The Hoodie Gamer, a Copenhagen-based gaming wall art brand. You write Etsy listings for digital download bundles — collections of high-res illustrated gaming wall art prints that buyers can print at home or at a local print shop.
+
+The primary customer is a gift-buyer: women 30-55 buying for gaming kids, partners, or friends. She wants art that looks beautiful on the wall. The brand positioning is architect-designed gaming art — beautiful enough for any room, authentic enough for any gamer.
+
+Return ONLY valid JSON with these fields:
+{
+  title: string (max 140 chars, lead with collection name, include 'Digital Download' and 'Gaming Wall Art', under 15 words),
+  description: string (200-250 words, 3 paragraphs: what the bundle contains, how to use/print, gift-buyer reassurance. Include 'digital download', 'print at home', 'gift for gamer' naturally),
+  tags: array of exactly 13 strings (each max 20 chars, gift-buyer first, follow the Hoodie Gamer 13-tag framework)
+}`;
+
+exports.generateBundleListing = onDocumentCreated(
+  {
+    document: "bundleListingJobs/{jobId}",
+    secrets: [ANTHROPIC_API_KEY],
+    timeoutSeconds: 120,
+  },
+  async (event) => {
+    const jobId = event.params.jobId;
+    const job = event.data.data();
+
+    if (job.status !== "queued") return;
+
+    const jobRef = db.collection("bundleListingJobs").doc(jobId);
+
+    try {
+      await jobRef.update({
+        status: "processing",
+        startedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      const Anthropic = (await import("@anthropic-ai/sdk")).default;
+      const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
+
+      const userMessage = `Bundle name: ${job.bundleName}
+Collections included: ${(job.collectionNames || []).join(", ")}
+Number of images: ${job.imageCount}
+Image listing titles: ${JSON.stringify(job.imageTitles || [])}`;
+
+      const response = await anthropic.messages.create({
+        model: "claude-sonnet-5",
+        max_tokens: 2000,
+        system: BUNDLE_LISTING_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: userMessage }],
+      });
+
+      const textBlock = response.content.find((b) => b.type === "text");
+      if (!textBlock) throw new Error("AI returned no text");
+      const match = textBlock.text.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error("AI response did not contain JSON");
+      const result = JSON.parse(match[0]);
+
+      await jobRef.update({
+        status: "completed",
+        result,
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("Bundle listing failed:", jobId, error);
+      await jobRef.update({
+        status: "failed",
+        error: error.message || "Unknown error",
+      });
     }
   }
 );

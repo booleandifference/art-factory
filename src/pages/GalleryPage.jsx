@@ -12,6 +12,10 @@ import ImageEditPanel from '../components/ImageEditPanel'
 
 const PAGE_SIZE = 10
 
+// Mirrors processUpscale in functions/index.js: large (2K) sources get 2x, which already
+// clears A3 at 300 DPI; smaller ones get 4x. Keep in sync with the backend.
+const upscaleFactorFor = (img) => (Math.max(img.width || 768, img.height || 1088) >= 2200 ? 2 : 4)
+
 export default function GalleryPage() {
   const [searchParams] = useSearchParams()
   const { collections: COLLECTIONS } = useCollections()
@@ -332,7 +336,7 @@ export default function GalleryPage() {
                     </p>
                     <span className="text-[10px] text-gray-400">
                       {img.metadata?.model || 'Unknown model'} · seed {img.metadata?.seed || '—'}
-                      {img.upscaled ? ' · 4x upscaled' : ''}
+                      {img.upscaled ? ` · ${img.upscaleScale || 4}x upscaled` : ''}
                     </span>
                   </div>
                 </div>
@@ -455,7 +459,9 @@ export default function GalleryPage() {
                 onClick={() => handleUpscale(selectedImage.id)}
                 disabled={upscaling.has(selectedImage.id)}
               >
-                {upscaling.has(selectedImage.id) ? '4x Upscaling...' : '4x Upscale'}
+                {upscaling.has(selectedImage.id)
+                  ? `${upscaleFactorFor(selectedImage)}x Upscaling...`
+                  : `${selectedImage.upscaled ? 'Re-upscale' : 'Upscale'} ${upscaleFactorFor(selectedImage)}x`}
               </Button>
               {selectedImage.url && (
                 <a

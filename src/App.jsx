@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import Layout from './components/common/Layout'
 import LoginPage from './pages/LoginPage'
@@ -61,6 +62,16 @@ export default function App() {
   return (
     <AuthProvider>
       <ProtectedRoutes />
+      <Toaster
+        position="bottom-right"
+        toastOptions={{
+          style: {
+            background: 'var(--color-surface)',
+            color: 'var(--color-text)',
+            border: '1px solid var(--color-border)',
+          },
+        }}
+      />
     </AuthProvider>
   )
 }

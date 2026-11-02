@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import Button from './common/Button'
-import { useDocument, useFirestoreCrud } from '../hooks/useFirestore'
+import { useCollection, useDocument, useFirestoreCrud } from '../hooks/useFirestore'
 import { useCollections } from '../hooks/useCollections'
 
 export default function ListingPanel({ image, onClose, onUpdate }) {
@@ -77,6 +77,14 @@ export default function ListingPanel({ image, onClose, onUpdate }) {
 
   const listing = image.listing || null
   const listingStatus = listing?.status || 'none'
+
+  // Latest Gelato publish job for this image — failures are only recorded on the job doc.
+  // No sort field (equality-only query needs no composite index); sort client-side.
+  const { documents: publishJobs } = useCollection('publishJobs', [{ field: 'imageId', op: '==', value: image.id }], null)
+  const latestPublishJob = [...publishJobs].sort(
+    (a, b) => (b.createdAt?.toMillis?.() ?? Infinity) - (a.createdAt?.toMillis?.() ?? Infinity)
+  )[0]
+  const publishInProgress = latestPublishJob?.status === 'queued' || latestPublishJob?.status === 'processing'
 
   // When job completes, clear the job ID tracker
   useEffect(() => {
@@ -581,11 +589,26 @@ export default function ListingPanel({ image, onClose, onUpdate }) {
                     variant="primary"
                     size="sm"
                     onClick={handlePublish}
-                    disabled={!allChecks || publishing || (image.store !== 'shop-a-mug' && !selectedTemplateId)}
+                    disabled={!allChecks || publishing || publishInProgress || (image.store !== 'shop-a-mug' && !selectedTemplateId)}
                     style={{ width: '100%' }}
                   >
-                    {publishing ? 'Publishing...' : allChecks ? 'Publish to Etsy via Gelato' : 'Complete checklist to publish'}
+                    {publishing || publishInProgress ? 'Publishing...' : allChecks ? 'Publish to Etsy via Gelato' : 'Complete checklist to publish'}
                   </Button>
+                  {publishInProgress && (
+                    <p className="text-[10px] mt-1.5 animate-pulse" style={{ color: '#f9e2af' }}>
+                      {latestPublishJob.status === 'processing' ? 'Creating product on Gelato…' : 'Queued for publishing…'}
+                    </p>
+                  )}
+                  {latestPublishJob?.status === 'failed' && (
+                    <div className="mt-2 p-2 rounded" style={{ backgroundColor: 'rgba(243,139,168,0.1)', border: '1px solid rgba(243,139,168,0.3)' }}>
+                      <p className="text-xs font-medium" style={{ color: '#f38ba8' }}>
+                        Last publish attempt failed
+                      </p>
+                      <p className="text-[10px] mt-0.5" style={{ color: 'var(--color-text)' }}>
+                        {latestPublishJob.error || 'Unknown error — check the publishToGelato logs'}
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 

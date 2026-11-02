@@ -114,7 +114,7 @@ Every box named after a Cloud Function runs off a Firestore job queue: the dashb
 |-------|-----------|
 | Dashboard | React 19 + Vite + Tailwind CSS v4 + React Router v7 |
 | Public site | React 19 + Vite, prerendered (`site/`) |
-| Backend | Firebase Cloud Functions (Node.js 20), driven by Firestore job queues |
+| Backend | Firebase Cloud Functions (Node.js 24), driven by Firestore job queues |
 | Database / storage / auth | Firestore, Firebase Storage, Firebase Auth (single user) |
 | Image generation | fal.ai: Flux, SDXL, nano-banana |
 | Upscaling | fal.ai: seedvr |
@@ -138,7 +138,7 @@ firestore.rules, storage.rules, firebase.json
 
 ## Setup
 
-You need Node.js 20, the Firebase CLI (`npm i -g firebase-tools`), and your own Firebase project on the Blaze plan (Cloud Functions require it). You also need accounts with fal.ai, Anthropic, Gelato and Etsy.
+You need Node.js 24, the Firebase CLI (`npm i -g firebase-tools`), and your own Firebase project on the Blaze plan (Cloud Functions require it). You also need accounts with fal.ai, Anthropic, Gelato and Etsy.
 
 ### 1. Install
 
